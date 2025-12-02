@@ -232,6 +232,12 @@ def graph_outdated(conan_api, parser, *args):
     print_graph_basic(deps_graph)
 
     if args.check_revisions:
+        # Report graph errors (e.g., missing packages) before analyzing binaries
+        deps_graph.report_graph_error()
+        # Analyze binaries to compute package_ids and revisions for all packages in the graph
+        # This is required before checking revision updates, as load_graph_* only loads recipes
+        conan_api.graph.analyze_binaries(deps_graph, args.build, remotes=remotes,
+                                         update=args.update, lockfile=lockfile)
         # Check for outdated package revisions instead of version updates
         outdated = check_outdated_revisions(conan_api, deps_graph, remotes)
         return {"_revisions": True, "data": outdated}
