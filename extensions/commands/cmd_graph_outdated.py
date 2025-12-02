@@ -15,6 +15,7 @@ from conan.api.model.refs import PkgReference
 from conan.cli.args import common_graph_args, validate_common_graph_args
 from conan.cli.command import conan_command
 from conan.cli.printers.graph import print_graph_basic
+from conan.errors import ConanException
 
 
 def outdated_text_formatter(result):
@@ -106,7 +107,7 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
 
         # Build the package reference for querying
         pref = PkgReference(ref=node.ref, package_id=node.package_id, revision=None)
-        pref_key = str(pref)  # name/version#rrev:package_id
+        pref_key = str(pref)  # name/version:package_id
 
         current_prev = node.prev
 
@@ -135,8 +136,8 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
                                 "timestamp": latest_timestamp
                             }
                         }
-            except Exception:
-                # Package not found in this remote, continue to next
+            except ConanException:
+                # Package not found in this remote or connection error, continue to next
                 continue
 
     return outdated_revisions
