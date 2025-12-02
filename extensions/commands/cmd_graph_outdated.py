@@ -122,13 +122,12 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
 
         current_prev = node.prev
 
-        # Initialize entry for this package
-        if pref_key not in package_revisions:
-            package_revisions[pref_key] = {
-                "current_prev": current_prev,
-                "latest_remote": None,
-                "is_outdated": False
-            }
+        # Initialize entry for this package (each package is processed once)
+        package_revisions[pref_key] = {
+            "current_prev": current_prev,
+            "latest_remote": None,
+            "is_outdated": False
+        }
 
         # Check each remote for package revisions
         for remote in remotes:
@@ -140,21 +139,18 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
                 latest_prev = latest_pref.revision
                 latest_timestamp = latest_pref.timestamp
 
-                # Store the latest revision info from remotes
-                existing = package_revisions.get(pref_key)
-                if existing["latest_remote"] is None or (latest_timestamp is not None and
-                        (existing["latest_remote"]["timestamp"] is None or
-                         latest_timestamp > existing["latest_remote"]["timestamp"])):
-                    is_outdated = latest_prev != current_prev
-                    package_revisions[pref_key] = {
-                        "current_prev": current_prev,
-                        "latest_remote": {
-                            "prev": latest_prev,
-                            "remote": remote.name,
-                            "timestamp": latest_timestamp
-                        },
-                        "is_outdated": is_outdated
+                # Update the latest revision info if this is newer than what we have
+                existing = package_revisions[pref_key]
+                existing_remote = existing["latest_remote"]
+                if existing_remote is None or (latest_timestamp is not None and
+                        (existing_remote["timestamp"] is None or
+                         latest_timestamp > existing_remote["timestamp"])):
+                    existing["latest_remote"] = {
+                        "prev": latest_prev,
+                        "remote": remote.name,
+                        "timestamp": latest_timestamp
                     }
+                    existing["is_outdated"] = latest_prev != current_prev
             except ConanException:
                 # Package not found in this remote or connection error, continue to next
                 continue
