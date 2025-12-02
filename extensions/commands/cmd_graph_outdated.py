@@ -18,6 +18,82 @@ from conan.cli.printers.graph import print_graph_basic
 from conan.errors import ConanException
 
 
+def write_graph_html(deps_graph, html_path="graph.html"):
+    try:
+        from graphviz import Digraph
+    except Exception:
+        Digraph = None
+    # collect nodes
+    nodes = None
+    if hasattr(deps_graph, 'nodes'):
+        try:
+            nodes = list(deps_graph.nodes)
+        except Exception:
+            nodes = None
+    if nodes is None and hasattr(deps_graph, 'graph') and hasattr(deps_graph.graph, 'nodes'):
+        try:
+            nodes = list(deps_graph.graph.nodes)
+        except Exception:
+            nodes = []
+    if nodes is None:
+        nodes = []
+    # collect edges
+    edges = []
+    if hasattr(deps_graph, 'edges'):
+        try:
+            edges = list(deps_graph.edges)
+        except Exception:
+            edges = []
+    elif hasattr(deps_graph, 'graph') and hasattr(deps_graph.graph, 'edges'):
+        try:
+            edges = list(deps_graph.graph.edges)
+        except Exception:
+            edges = []
+
+    # Try graphviz rendering
+    if Digraph is not None:
+        try:
+            dot = Digraph(format='svg')
+            for n in nodes:
+                key = str(n)
+                dot.node(key, label=key)
+            for e in edges:
+                try:
+                    src, dst = e[0], e[1]
+                except Exception:
+                    continue
+                dot.edge(str(src), str(dst))
+            svg = dot.pipe(format='svg')
+            if svg:
+                html = '' + svg.decode('utf-8') + ''
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(html)
+                print(f"Wrote graph HTML to {html_path}")
+                return
+        except Exception:
+            pass
+
+    # Fallback: write DOT file
+    dot_path = html_path + '.dot'
+    try:
+        with open(dot_path, 'w', encoding='utf-8') as f:
+            f.write('digraph G {\n')
+            for n in nodes:
+                k = str(n).replace('"', '\\"')
+                f.write(f'  "{k}";\n')
+            for e in edges:
+                try:
+                    s = str(e[0]).replace('"', '\\"')
+                    t = str(e[1]).replace('"', '\\"')
+                    f.write(f'  "{s}" -> "{t}";\n')
+                except Exception:
+                    continue
+            f.write('}\n')
+        print(f"Wrote DOT fallback to {dot_path} (render with: dot -Tsvg {dot_path} -o graph.svg)")
+    except Exception:
+        print('Failed to write graph output files')
+
+
 def _print_skipped_packages(skipped):
     """Helper to print packages without revision info."""
     cli_out_write("Packages without revision (not yet installed):", fg=Color.BRIGHT_YELLOW)
@@ -230,6 +306,8 @@ def graph_outdated(conan_api, parser, *args):
                                                          remotes, args.update,
                                                          check_updates=args.check_updates)
     print_graph_basic(deps_graph)
+    deps_graph.report_graph_error()
+    write_graph_html(deps_graph, 'graph.html')
 
     if args.check_revisions:
         # Check for outdated package revisions instead of version updates
