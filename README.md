@@ -95,12 +95,16 @@ Example JSON output:
 
 #### Package Revision Output
 
-When using `--check-revisions`, the output shows package revision information:
+When using `--check-revisions`, the output shows package revision information for all packages,
+indicating whether each package is up-to-date or outdated:
 
 Example text output:
 ```
-======== Outdated package revisions ========
-zlib/1.2.13#abc123:pkg456
+======== Package revisions ========
+zlib/1.2.13#abc123:pkg456 [UP-TO-DATE]
+    Current revision:  rev1
+    Latest in remote(s):  rev1 - conancenter
+openssl/3.0.0#def456:pkg789 [OUTDATED]
     Current revision:  rev1
     Latest in remote(s):  rev2 - conancenter
 ```
@@ -110,6 +114,15 @@ Example JSON output:
 {
     "zlib/1.2.13#abc123:pkg456": {
         "current_revision": "rev1",
+        "is_outdated": false,
+        "latest_remote": {
+            "revision": "rev1",
+            "remote": "conancenter"
+        }
+    },
+    "openssl/3.0.0#def456:pkg789": {
+        "current_revision": "rev1",
+        "is_outdated": true,
         "latest_remote": {
             "revision": "rev2",
             "remote": "conancenter"
