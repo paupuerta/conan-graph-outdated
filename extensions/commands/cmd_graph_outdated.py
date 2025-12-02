@@ -24,19 +24,17 @@ def write_graph_html(deps_graph, html_path="graph.html"):
     except Exception:
         Digraph = None
     # collect nodes
-    nodes = None
+    nodes = []
     if hasattr(deps_graph, 'nodes'):
         try:
             nodes = list(deps_graph.nodes)
         except Exception:
-            nodes = None
-    if nodes is None and hasattr(deps_graph, 'graph') and hasattr(deps_graph.graph, 'nodes'):
+            nodes = []
+    if not nodes and hasattr(deps_graph, 'graph') and hasattr(deps_graph.graph, 'nodes'):
         try:
             nodes = list(deps_graph.graph.nodes)
         except Exception:
             nodes = []
-    if nodes is None:
-        nodes = []
     # collect edges
     edges = []
     if hasattr(deps_graph, 'edges'):
@@ -65,7 +63,7 @@ def write_graph_html(deps_graph, html_path="graph.html"):
                 dot.edge(str(src), str(dst))
             svg = dot.pipe(format='svg')
             if svg:
-                html = '' + svg.decode('utf-8') + ''
+                html = '<html><body>' + svg.decode('utf-8') + '</body></html>'
                 with open(html_path, 'w', encoding='utf-8') as f:
                     f.write(html)
                 print(f"Wrote graph HTML to {html_path}")
@@ -306,7 +304,8 @@ def graph_outdated(conan_api, parser, *args):
                                                          remotes, args.update,
                                                          check_updates=args.check_updates)
     print_graph_basic(deps_graph)
-    deps_graph.report_graph_error()
+    if hasattr(deps_graph, 'report_graph_error'):
+        deps_graph.report_graph_error()
     write_graph_html(deps_graph, 'graph.html')
 
     if args.check_revisions:
