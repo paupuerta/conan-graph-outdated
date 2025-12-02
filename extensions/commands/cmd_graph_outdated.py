@@ -22,14 +22,17 @@ def outdated_text_formatter(result):
     # Check if this is a revision check result
     if isinstance(result, dict) and result.get("_revisions"):
         data = result.get("data", {})
-        cli_out_write("======== Outdated package revisions ========", fg=Color.BRIGHT_MAGENTA)
+        cli_out_write("======== Package revisions ========", fg=Color.BRIGHT_MAGENTA)
 
         if len(data) == 0:
-            cli_out_write("No outdated package revisions in graph", fg=Color.BRIGHT_YELLOW)
+            cli_out_write("No packages with revision info in graph", fg=Color.BRIGHT_YELLOW)
             return
 
         for key, value in data.items():
-            cli_out_write(key, fg=Color.BRIGHT_YELLOW)
+            is_outdated = value.get("is_outdated", False)
+            status = "OUTDATED" if is_outdated else "UP-TO-DATE"
+            status_color = Color.BRIGHT_RED if is_outdated else Color.BRIGHT_GREEN
+            cli_out_write(f"{key} [{status}]", fg=status_color)
             cli_out_write(
                 f'    Current revision:  {value["current_prev"]}',
                 fg=Color.BRIGHT_CYAN)
@@ -37,6 +40,10 @@ def outdated_text_formatter(result):
             if latest_remote:
                 cli_out_write(
                     f'    Latest in remote(s):  {latest_remote["prev"]} - {latest_remote["remote"]}',
+                    fg=Color.BRIGHT_CYAN)
+            else:
+                cli_out_write(
+                    '    Latest in remote(s):  Not found in remotes',
                     fg=Color.BRIGHT_CYAN)
         return
 
@@ -68,6 +75,7 @@ def outdated_json_formatter(result):
     if isinstance(result, dict) and result.get("_revisions"):
         data = result.get("data", {})
         output = {key: {"current_revision": value["current_prev"],
+                        "is_outdated": value.get("is_outdated", False),
                         "latest_remote": None if value["latest_remote"] is None
                         else {"revision": value["latest_remote"]["prev"],
                               "remote": value["latest_remote"]["remote"]}}
@@ -91,12 +99,15 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
 
     For each package in the graph, compare the current package revision
     with the latest revision available in the remotes.
+
+    Returns all packages with their revision comparison, allowing users to
+    verify whether revisions match or differ.
     """
     dependencies = deps_graph.nodes[1:]
-    outdated_revisions = {}
+    package_revisions = {}
 
     if len(dependencies) == 0:
-        return outdated_revisions
+        return package_revisions
 
     ConanOutput().title("Checking package revisions in remotes")
 
@@ -111,7 +122,15 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
 
         current_prev = node.prev
 
-        # Check each remote for newer package revisions
+        # Initialize entry for this package
+        if pref_key not in package_revisions:
+            package_revisions[pref_key] = {
+                "current_prev": current_prev,
+                "latest_remote": None,
+                "is_outdated": False
+            }
+
+        # Check each remote for package revisions
         for remote in remotes:
             try:
                 latest_pref = conan_api.list.latest_package_revision(pref, remote=remote)
@@ -121,26 +140,26 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
                 latest_prev = latest_pref.revision
                 latest_timestamp = latest_pref.timestamp
 
-                # Compare revisions: if they differ and the remote has a newer timestamp
-                if latest_prev != current_prev:
-                    # If we already have a latest_remote, check if this one is newer
-                    existing = outdated_revisions.get(pref_key)
-                    if existing is None or (latest_timestamp is not None and
-                            (existing["latest_remote"]["timestamp"] is None or
-                             latest_timestamp > existing["latest_remote"]["timestamp"])):
-                        outdated_revisions[pref_key] = {
-                            "current_prev": current_prev,
-                            "latest_remote": {
-                                "prev": latest_prev,
-                                "remote": remote.name,
-                                "timestamp": latest_timestamp
-                            }
-                        }
+                # Store the latest revision info from remotes
+                existing = package_revisions.get(pref_key)
+                if existing["latest_remote"] is None or (latest_timestamp is not None and
+                        (existing["latest_remote"]["timestamp"] is None or
+                         latest_timestamp > existing["latest_remote"]["timestamp"])):
+                    is_outdated = latest_prev != current_prev
+                    package_revisions[pref_key] = {
+                        "current_prev": current_prev,
+                        "latest_remote": {
+                            "prev": latest_prev,
+                            "remote": remote.name,
+                            "timestamp": latest_timestamp
+                        },
+                        "is_outdated": is_outdated
+                    }
             except ConanException:
                 # Package not found in this remote or connection error, continue to next
                 continue
 
-    return outdated_revisions
+    return package_revisions
 
 
 @conan_command(group="Custom commands", formatters={"text": outdated_text_formatter,
