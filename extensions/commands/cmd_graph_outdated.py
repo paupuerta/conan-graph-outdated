@@ -18,6 +18,13 @@ from conan.cli.printers.graph import print_graph_basic
 from conan.errors import ConanException
 
 
+def _print_skipped_packages(skipped):
+    """Helper to print packages without revision info."""
+    cli_out_write("Packages without revision (not yet installed):", fg=Color.BRIGHT_YELLOW)
+    for pkg in skipped:
+        cli_out_write(f"    {pkg}", fg=Color.BRIGHT_CYAN)
+
+
 def outdated_text_formatter(result):
     # Check if this is a revision check result
     if isinstance(result, dict) and result.get("_revisions"):
@@ -32,9 +39,7 @@ def outdated_text_formatter(result):
 
         if len(packages) == 0 and len(skipped) > 0:
             cli_out_write("No packages with revision info in graph", fg=Color.BRIGHT_YELLOW)
-            cli_out_write("Packages without revision (not yet installed):", fg=Color.BRIGHT_YELLOW)
-            for pkg in skipped:
-                cli_out_write(f"    {pkg}", fg=Color.BRIGHT_CYAN)
+            _print_skipped_packages(skipped)
             return
 
         for key, value in packages.items():
@@ -57,9 +62,7 @@ def outdated_text_formatter(result):
 
         if len(skipped) > 0:
             cli_out_write("", fg=Color.BRIGHT_YELLOW)
-            cli_out_write("Packages without revision (not yet installed):", fg=Color.BRIGHT_YELLOW)
-            for pkg in skipped:
-                cli_out_write(f"    {pkg}", fg=Color.BRIGHT_CYAN)
+            _print_skipped_packages(skipped)
         return
 
     # Original outdated versions formatter
