@@ -18,17 +18,31 @@ from conan.cli.printers.graph import print_graph_basic
 from conan.errors import ConanException
 
 
+def _print_skipped_packages(skipped):
+    """Helper to print packages without revision info."""
+    cli_out_write("Packages without revision (not yet installed):", fg=Color.BRIGHT_YELLOW)
+    for pkg in skipped:
+        cli_out_write(f"    {pkg}", fg=Color.BRIGHT_CYAN)
+
+
 def outdated_text_formatter(result):
     # Check if this is a revision check result
     if isinstance(result, dict) and result.get("_revisions"):
         data = result.get("data", {})
+        packages = data.get("packages", {})
+        skipped = data.get("skipped", [])
         cli_out_write("======== Package revisions ========", fg=Color.BRIGHT_MAGENTA)
 
-        if len(data) == 0:
-            cli_out_write("No packages with revision info in graph", fg=Color.BRIGHT_YELLOW)
+        if len(packages) == 0 and len(skipped) == 0:
+            cli_out_write("No packages in graph", fg=Color.BRIGHT_YELLOW)
             return
 
-        for key, value in data.items():
+        if len(packages) == 0 and len(skipped) > 0:
+            cli_out_write("No packages with revision info in graph", fg=Color.BRIGHT_YELLOW)
+            _print_skipped_packages(skipped)
+            return
+
+        for key, value in packages.items():
             is_outdated = value.get("is_outdated", False)
             status = "OUTDATED" if is_outdated else "UP-TO-DATE"
             status_color = Color.BRIGHT_RED if is_outdated else Color.BRIGHT_GREEN
@@ -45,6 +59,10 @@ def outdated_text_formatter(result):
                 cli_out_write(
                     '    Latest in remote(s):  Not found in remotes',
                     fg=Color.BRIGHT_CYAN)
+
+        if len(skipped) > 0:
+            cli_out_write("", fg=Color.BRIGHT_YELLOW)
+            _print_skipped_packages(skipped)
         return
 
     # Original outdated versions formatter
@@ -74,12 +92,17 @@ def outdated_json_formatter(result):
     # Check if this is a revision check result
     if isinstance(result, dict) and result.get("_revisions"):
         data = result.get("data", {})
-        output = {key: {"current_revision": value["current_prev"],
-                        "is_outdated": value.get("is_outdated", False),
-                        "latest_remote": None if value["latest_remote"] is None
-                        else {"revision": value["latest_remote"]["prev"],
-                              "remote": value["latest_remote"]["remote"]}}
-                  for key, value in data.items()}
+        packages = data.get("packages", {})
+        skipped = data.get("skipped", [])
+        output = {
+            "packages": {key: {"current_revision": value["current_prev"],
+                              "is_outdated": value.get("is_outdated", False),
+                              "latest_remote": None if value["latest_remote"] is None
+                              else {"revision": value["latest_remote"]["prev"],
+                                    "remote": value["latest_remote"]["remote"]}}
+                        for key, value in packages.items()},
+            "skipped_no_revision": skipped
+        }
         cli_out_write(json.dumps(output))
         return
 
@@ -105,15 +128,20 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
     """
     dependencies = deps_graph.nodes[1:]
     package_revisions = {}
+    skipped_packages = []
 
     if len(dependencies) == 0:
-        return package_revisions
+        return {"packages": package_revisions, "skipped": skipped_packages}
 
     ConanOutput().title("Checking package revisions in remotes")
 
     for node in dependencies:
         # Skip nodes without package info (e.g., virtual packages)
-        if node.ref is None or node.package_id is None or node.prev is None:
+        if node.ref is None or node.package_id is None:
+            continue
+        if node.prev is None:
+            # Track packages without revision info
+            skipped_packages.append(str(node.ref))
             continue
 
         # Build the package reference for querying
@@ -155,7 +183,7 @@ def check_outdated_revisions(conan_api, deps_graph, remotes):
                 # Package not found in this remote or connection error, continue to next
                 continue
 
-    return package_revisions
+    return {"packages": package_revisions, "skipped": skipped_packages}
 
 
 @conan_command(group="Custom commands", formatters={"text": outdated_text_formatter,

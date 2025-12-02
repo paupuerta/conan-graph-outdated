@@ -96,7 +96,8 @@ Example JSON output:
 #### Package Revision Output
 
 When using `--check-revisions`, the output shows package revision information for all packages,
-indicating whether each package is up-to-date or outdated:
+indicating whether each package is up-to-date or outdated. Packages without revision information
+(not yet installed) are listed separately.
 
 Example text output:
 ```
@@ -107,27 +108,33 @@ zlib/1.2.13#abc123:pkg456 [UP-TO-DATE]
 openssl/3.0.0#def456:pkg789 [OUTDATED]
     Current revision:  rev1
     Latest in remote(s):  rev2 - conancenter
+
+Packages without revision (not yet installed):
+    boost/1.82.0
 ```
 
 Example JSON output:
 ```json
 {
-    "zlib/1.2.13#abc123:pkg456": {
-        "current_revision": "rev1",
-        "is_outdated": false,
-        "latest_remote": {
-            "revision": "rev1",
-            "remote": "conancenter"
+    "packages": {
+        "zlib/1.2.13#abc123:pkg456": {
+            "current_revision": "rev1",
+            "is_outdated": false,
+            "latest_remote": {
+                "revision": "rev1",
+                "remote": "conancenter"
+            }
+        },
+        "openssl/3.0.0#def456:pkg789": {
+            "current_revision": "rev1",
+            "is_outdated": true,
+            "latest_remote": {
+                "revision": "rev2",
+                "remote": "conancenter"
+            }
         }
     },
-    "openssl/3.0.0#def456:pkg789": {
-        "current_revision": "rev1",
-        "is_outdated": true,
-        "latest_remote": {
-            "revision": "rev2",
-            "remote": "conancenter"
-        }
-    }
+    "skipped_no_revision": ["boost/1.82.0"]
 }
 ```
 
