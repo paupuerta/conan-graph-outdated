@@ -33,6 +33,7 @@ conan graph-outdated [path] [options]
 
 - `-f, --format {text,json}` - Select the output format (text or json)
 - `--check-updates` - Check if there are recipe updates
+- `--check-revisions` - Check if there are package revision updates (instead of version updates)
 - `--build-require` - Whether the provided reference is a build-require
 - `-r, --remote` - Look in the specified remote or remotes server
 - `-nr, --no-remote` - Do not use remote, resolve exclusively in the cache
@@ -58,6 +59,11 @@ Check for outdated dependencies with a specific profile:
 conan graph-outdated . -pr:h myprofile
 ```
 
+Check for outdated package revisions (instead of versions):
+```bash
+conan graph-outdated . --check-revisions
+```
+
 ### Output
 
 The command outputs information about outdated dependencies including:
@@ -81,6 +87,31 @@ Example JSON output:
         "version_ranges": [],
         "latest_remote": {
             "ref": "zlib/1.2.13",
+            "remote": "conancenter"
+        }
+    }
+}
+```
+
+#### Package Revision Output
+
+When using `--check-revisions`, the output shows package revision information:
+
+Example text output:
+```
+======== Outdated package revisions ========
+zlib/1.2.13#abc123:pkg456
+    Current revision:  rev1
+    Latest in remote(s):  rev2 - conancenter
+```
+
+Example JSON output:
+```json
+{
+    "zlib/1.2.13#abc123:pkg456": {
+        "current_revision": "rev1",
+        "latest_remote": {
+            "revision": "rev2",
             "remote": "conancenter"
         }
     }
