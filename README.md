@@ -8,10 +8,11 @@ This extension provides a custom Conan command to check for outdated dependencie
 
 ## Installation
 
-To install this extension, copy the `extensions/commands` folder contents to your Conan home extensions directory:
+To install this extension, copy the command file to your Conan home extensions directory:
 
 ```bash
-cp -r extensions/commands/* ~/.conan2/extensions/commands/
+mkdir -p ~/.conan2/extensions/commands
+cp extensions/commands/cmd_graph_outdated.py ~/.conan2/extensions/commands/
 ```
 
 Alternatively, you can configure Conan to use this repository directly by setting the `_CONAN_INTERNAL_CUSTOM_COMMANDS_PATH` environment variable (for development/testing purposes only).
