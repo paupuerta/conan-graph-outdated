@@ -21,6 +21,7 @@ def outdated_text_formatter(result):
 
     if len(result) == 0:
         cli_out_write("No outdated dependencies in graph", fg=Color.BRIGHT_YELLOW)
+        return
 
     for key, value in result.items():
         current_versions_set = list({str(v) for v in value["cache_refs"]})
@@ -28,9 +29,11 @@ def outdated_text_formatter(result):
         cli_out_write(
             f'    Current versions:  {", ".join(current_versions_set) if value["cache_refs"] else "No version found in cache"}',
             fg=Color.BRIGHT_CYAN)
-        cli_out_write(
-            f'    Latest in remote(s):  {value["latest_remote"]["ref"]} - {value["latest_remote"]["remote"]}',
-            fg=Color.BRIGHT_CYAN)
+        latest_remote = value.get("latest_remote")
+        if latest_remote:
+            cli_out_write(
+                f'    Latest in remote(s):  {latest_remote["ref"]} - {latest_remote["remote"]}',
+                fg=Color.BRIGHT_CYAN)
         if value["version_ranges"]:
             cli_out_write(f'    Version ranges: ' + str(value["version_ranges"])[1:-1],
                           fg=Color.BRIGHT_CYAN)
@@ -39,7 +42,7 @@ def outdated_text_formatter(result):
 def outdated_json_formatter(result):
     output = {key: {"current_versions": list({str(v) for v in value["cache_refs"]}),
                     "version_ranges": [str(r) for r in value["version_ranges"]],
-                    "latest_remote": [] if value["latest_remote"] is None
+                    "latest_remote": None if value["latest_remote"] is None
                     else {"ref": str(value["latest_remote"]["ref"]),
                           "remote": str(value["latest_remote"]["remote"])}}
               for key, value in result.items()}
