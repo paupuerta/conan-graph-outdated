@@ -34,6 +34,7 @@ conan graph-outdated [path] [options]
 - `-f, --format {text,json}` - Select the output format (text or json)
 - `--check-updates` - Check if there are recipe updates
 - `--check-revisions` - Check if there are package revision updates (instead of version updates)
+- `--check-recipe-revisions` - Check if there are recipe revision updates (instead of version updates)
 - `--build-require` - Whether the provided reference is a build-require
 - `-r, --remote` - Look in the specified remote or remotes server
 - `-nr, --no-remote` - Do not use remote, resolve exclusively in the cache
@@ -62,6 +63,11 @@ conan graph-outdated . -pr:h myprofile
 Check for outdated package revisions (instead of versions):
 ```bash
 conan graph-outdated . --check-revisions
+```
+
+Check for outdated recipe revisions (instead of versions):
+```bash
+conan graph-outdated . --check-recipe-revisions
 ```
 
 ### Output
@@ -130,6 +136,51 @@ Example JSON output:
             "is_outdated": true,
             "latest_remote": {
                 "revision": "rev2",
+                "remote": "conancenter"
+            }
+        }
+    },
+    "skipped_no_revision": ["boost/1.82.0"]
+}
+```
+
+#### Recipe Revision Output
+
+When using `--check-recipe-revisions`, the output shows recipe revision information for all recipes,
+indicating whether each recipe is up-to-date or outdated. Recipes without revision information
+(not yet installed) are listed separately.
+
+Example text output:
+```
+======== Recipe revisions ========
+zlib/1.2.13 [UP-TO-DATE]
+    Current revision:  abc123
+    Latest in remote(s):  abc123 - conancenter
+openssl/3.0.0 [OUTDATED]
+    Current revision:  def456
+    Latest in remote(s):  ghi789 - conancenter
+
+Recipes without revision (not yet installed):
+    boost/1.82.0
+```
+
+Example JSON output:
+```json
+{
+    "recipes": {
+        "zlib/1.2.13": {
+            "current_revision": "abc123",
+            "is_outdated": false,
+            "latest_remote": {
+                "revision": "abc123",
+                "remote": "conancenter"
+            }
+        },
+        "openssl/3.0.0": {
+            "current_revision": "def456",
+            "is_outdated": true,
+            "latest_remote": {
+                "revision": "ghi789",
                 "remote": "conancenter"
             }
         }
