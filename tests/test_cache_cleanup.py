@@ -30,6 +30,12 @@ from extensions.commands.cmd_cache_cleanup import (
 )
 
 
+# Helper class for exception testing
+class ConanException(Exception):
+    """Test exception class to simulate ConanException."""
+    pass
+
+
 class TestIdentifyRecipesWithoutBinaries(unittest.TestCase):
     """Test the _identify_recipes_without_binaries function."""
     
@@ -187,16 +193,26 @@ class TestRunConanCommand(unittest.TestCase):
     @patch('extensions.commands.cmd_cache_cleanup.subprocess.run')
     def test_failed_command(self, mock_run):
         """Test failed command execution."""
-        # Create a real exception class to use
-        class ConanException(Exception):
-            pass
-        
-        # Patch the module to use our exception
         with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
             mock_run.side_effect = Exception("Command failed")
             
             with self.assertRaises(Exception):
                 _run_conan_command(["conan", "list"])
+    
+    def test_non_conan_command_rejected(self):
+        """Test that non-conan commands are rejected."""
+        with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
+            with self.assertRaises(ConanException):
+                _run_conan_command(["rm", "-rf", "/"])
+            
+            with self.assertRaises(ConanException):
+                _run_conan_command(["python", "script.py"])
+    
+    def test_empty_command_rejected(self):
+        """Test that empty commands are rejected."""
+        with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
+            with self.assertRaises(ConanException):
+                _run_conan_command([])
 
 
 class TestRemoveRecipe(unittest.TestCase):
@@ -248,11 +264,6 @@ class TestListCacheRecipes(unittest.TestCase):
     @patch('extensions.commands.cmd_cache_cleanup._run_conan_command')
     def test_list_cache_recipes_invalid_json(self, mock_run):
         """Test listing cache recipes with invalid JSON."""
-        # Create a real exception class to use
-        class ConanException(Exception):
-            pass
-        
-        # Patch the module to use our exception
         with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
             mock_run.return_value = "invalid json"
             

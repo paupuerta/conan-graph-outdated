@@ -35,6 +35,10 @@ def _run_conan_command(cmd):
     Raises:
         ConanException: If command fails
     """
+    # Validate that we're only executing conan commands
+    if not cmd or cmd[0] != "conan":
+        raise ConanException("Only conan commands are allowed")
+    
     try:
         result = subprocess.run(
             cmd,
@@ -108,7 +112,7 @@ def _identify_recipes_without_binaries(cache_data):
             packages = revision_data.get("packages", {})
             full_ref = f"{recipe_ref}#{revision_hash}"
             
-            if not packages or len(packages) == 0:
+            if not packages:
                 # No binary packages for this revision
                 recipes_to_remove.append(full_ref)
             else:
