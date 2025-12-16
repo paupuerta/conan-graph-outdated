@@ -291,9 +291,9 @@ Recipes/revisions kept (have binaries):
 
 #### How It Works
 
-1. **List Cache**: Executes `conan list '*:*' -c -f json` to get all recipes, their revisions, and package information from the Conan cache
-2. **Analyze**: Parses the JSON output to identify recipes/revisions with an empty `packages` field (no binaries)
-3. **Remove**: Automatically removes identified recipes/revisions using `conan remove` command
+1. **List Cache**: Uses Conan API's `conan_api.list.select()` to get all recipes, their revisions, and package information from the Conan cache
+2. **Analyze**: Iterates through the ListResult to identify recipes/revisions with no binary packages
+3. **Remove**: Uses Conan API's `conan_api.remove.recipe()` to remove identified recipes/revisions
 4. **Report**: Provides detailed feedback about what was inspected, removed, and skipped
 
 #### Use Cases

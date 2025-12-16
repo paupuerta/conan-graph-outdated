@@ -24,7 +24,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from extensions.commands.cmd_cache_cleanup import (
     _identify_recipes_without_binaries,
-    _run_conan_command,
     _list_cache_recipes,
     _remove_recipe
 )
@@ -36,13 +35,38 @@ class ConanException(Exception):
     pass
 
 
+# Helper classes to simulate Conan API objects
+class MockPackage:
+    """Mock package object."""
+    def __init__(self, package_id):
+        self.id = package_id
+
+
+class MockRecipeRevisionBundle:
+    """Mock recipe revision bundle."""
+    def __init__(self, packages=None):
+        self.packages = packages or {}
+
+
+class MockRecipeBundle:
+    """Mock recipe bundle."""
+    def __init__(self, revisions=None):
+        self.revisions = revisions or {}
+
+
+class MockListResult:
+    """Mock ListResult object."""
+    def __init__(self, recipe_bundles=None):
+        self.recipe_bundles = recipe_bundles or {}
+
+
 class TestIdentifyRecipesWithoutBinaries(unittest.TestCase):
     """Test the _identify_recipes_without_binaries function."""
     
     def test_empty_cache(self):
         """Test with an empty cache."""
-        cache_data = {"Local Cache": {}}
-        result = _identify_recipes_without_binaries(cache_data)
+        list_result = MockListResult(recipe_bundles={})
+        result = _identify_recipes_without_binaries(list_result)
         
         self.assertEqual(result["recipes_to_remove"], [])
         self.assertEqual(result["recipes_with_binaries"], [])
@@ -50,29 +74,21 @@ class TestIdentifyRecipesWithoutBinaries(unittest.TestCase):
     
     def test_all_recipes_have_binaries(self):
         """Test when all recipes have binary packages."""
-        cache_data = {
-            "Local Cache": {
-                "zlib/1.2.13": {
-                    "revisions": {
-                        "abc123": {
-                            "packages": {
-                                "pkg1": {"id": "pkg1"}
-                            }
-                        }
-                    }
-                },
-                "openssl/3.0.0": {
-                    "revisions": {
-                        "def456": {
-                            "packages": {
-                                "pkg2": {"id": "pkg2"}
-                            }
-                        }
-                    }
-                }
-            }
+        # Create mock structure
+        recipe_bundles = {
+            "zlib/1.2.13": MockRecipeBundle(revisions={
+                "abc123": MockRecipeRevisionBundle(packages={
+                    "pkg1": MockPackage("pkg1")
+                })
+            }),
+            "openssl/3.0.0": MockRecipeBundle(revisions={
+                "def456": MockRecipeRevisionBundle(packages={
+                    "pkg2": MockPackage("pkg2")
+                })
+            })
         }
-        result = _identify_recipes_without_binaries(cache_data)
+        list_result = MockListResult(recipe_bundles=recipe_bundles)
+        result = _identify_recipes_without_binaries(list_result)
         
         self.assertEqual(len(result["recipes_to_remove"]), 0)
         self.assertEqual(len(result["recipes_with_binaries"]), 2)
@@ -82,25 +98,17 @@ class TestIdentifyRecipesWithoutBinaries(unittest.TestCase):
     
     def test_all_recipes_without_binaries(self):
         """Test when all recipes lack binary packages."""
-        cache_data = {
-            "Local Cache": {
-                "zlib/1.2.13": {
-                    "revisions": {
-                        "abc123": {
-                            "packages": {}
-                        }
-                    }
-                },
-                "openssl/3.0.0": {
-                    "revisions": {
-                        "def456": {
-                            "packages": {}
-                        }
-                    }
-                }
-            }
+        # Create mock structure with empty packages
+        recipe_bundles = {
+            "zlib/1.2.13": MockRecipeBundle(revisions={
+                "abc123": MockRecipeRevisionBundle(packages={})
+            }),
+            "openssl/3.0.0": MockRecipeBundle(revisions={
+                "def456": MockRecipeRevisionBundle(packages={})
+            })
         }
-        result = _identify_recipes_without_binaries(cache_data)
+        list_result = MockListResult(recipe_bundles=recipe_bundles)
+        result = _identify_recipes_without_binaries(list_result)
         
         self.assertEqual(len(result["recipes_to_remove"]), 2)
         self.assertEqual(len(result["recipes_with_binaries"]), 0)
@@ -110,34 +118,21 @@ class TestIdentifyRecipesWithoutBinaries(unittest.TestCase):
     
     def test_mixed_recipes(self):
         """Test when some recipes have binaries and some don't."""
-        cache_data = {
-            "Local Cache": {
-                "zlib/1.2.13": {
-                    "revisions": {
-                        "abc123": {
-                            "packages": {
-                                "pkg1": {"id": "pkg1"}
-                            }
-                        }
-                    }
-                },
-                "openssl/3.0.0": {
-                    "revisions": {
-                        "def456": {
-                            "packages": {}
-                        }
-                    }
-                },
-                "boost/1.82.0": {
-                    "revisions": {
-                        "ghi789": {
-                            "packages": {}
-                        }
-                    }
-                }
-            }
+        recipe_bundles = {
+            "zlib/1.2.13": MockRecipeBundle(revisions={
+                "abc123": MockRecipeRevisionBundle(packages={
+                    "pkg1": MockPackage("pkg1")
+                })
+            }),
+            "openssl/3.0.0": MockRecipeBundle(revisions={
+                "def456": MockRecipeRevisionBundle(packages={})
+            }),
+            "boost/1.82.0": MockRecipeBundle(revisions={
+                "ghi789": MockRecipeRevisionBundle(packages={})
+            })
         }
-        result = _identify_recipes_without_binaries(cache_data)
+        list_result = MockListResult(recipe_bundles=recipe_bundles)
+        result = _identify_recipes_without_binaries(list_result)
         
         self.assertEqual(len(result["recipes_to_remove"]), 2)
         self.assertEqual(len(result["recipes_with_binaries"]), 1)
@@ -148,23 +143,16 @@ class TestIdentifyRecipesWithoutBinaries(unittest.TestCase):
     
     def test_multiple_revisions_per_recipe(self):
         """Test when a recipe has multiple revisions."""
-        cache_data = {
-            "Local Cache": {
-                "zlib/1.2.13": {
-                    "revisions": {
-                        "abc123": {
-                            "packages": {
-                                "pkg1": {"id": "pkg1"}
-                            }
-                        },
-                        "xyz789": {
-                            "packages": {}
-                        }
-                    }
-                }
-            }
+        recipe_bundles = {
+            "zlib/1.2.13": MockRecipeBundle(revisions={
+                "abc123": MockRecipeRevisionBundle(packages={
+                    "pkg1": MockPackage("pkg1")
+                }),
+                "xyz789": MockRecipeRevisionBundle(packages={})
+            })
         }
-        result = _identify_recipes_without_binaries(cache_data)
+        list_result = MockListResult(recipe_bundles=recipe_bundles)
+        result = _identify_recipes_without_binaries(list_result)
         
         self.assertEqual(len(result["recipes_to_remove"]), 1)
         self.assertEqual(len(result["recipes_with_binaries"]), 1)
@@ -173,102 +161,71 @@ class TestIdentifyRecipesWithoutBinaries(unittest.TestCase):
         self.assertIn("zlib/1.2.13#xyz789", result["recipes_to_remove"])
 
 
-class TestRunConanCommand(unittest.TestCase):
-    """Test the _run_conan_command function."""
-    
-    @patch('extensions.commands.cmd_cache_cleanup.subprocess.run')
-    def test_successful_command(self, mock_run):
-        """Test successful command execution."""
-        mock_run.return_value = MagicMock(
-            stdout="command output",
-            stderr="",
-            returncode=0
-        )
-        
-        result = _run_conan_command(["conan", "list"])
-        
-        self.assertEqual(result, "command output")
-        mock_run.assert_called_once()
-    
-    @patch('extensions.commands.cmd_cache_cleanup.subprocess.run')
-    def test_failed_command(self, mock_run):
-        """Test failed command execution."""
-        with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
-            mock_run.side_effect = Exception("Command failed")
-            
-            with self.assertRaises(Exception):
-                _run_conan_command(["conan", "list"])
-    
-    def test_non_conan_command_rejected(self):
-        """Test that non-conan commands are rejected."""
-        with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
-            with self.assertRaises(ConanException):
-                _run_conan_command(["rm", "-rf", "/"])
-            
-            with self.assertRaises(ConanException):
-                _run_conan_command(["python", "script.py"])
-    
-    def test_empty_command_rejected(self):
-        """Test that empty commands are rejected."""
-        with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
-            with self.assertRaises(ConanException):
-                _run_conan_command([])
-
-
 class TestRemoveRecipe(unittest.TestCase):
     """Test the _remove_recipe function."""
     
-    @patch('extensions.commands.cmd_cache_cleanup._run_conan_command')
-    def test_remove_without_confirmation(self, mock_run):
+    def test_remove_without_confirmation(self):
         """Test removing a recipe without confirmation."""
-        result = _remove_recipe("zlib/1.2.13#abc123", confirm=False)
+        mock_api = MagicMock()
+        mock_api.remove.recipe = MagicMock()
+        
+        result = _remove_recipe(mock_api, "zlib/1.2.13#abc123", confirm=False)
         
         self.assertTrue(result)
-        mock_run.assert_called_once_with(["conan", "remove", "zlib/1.2.13#abc123", "-c"])
+        mock_api.remove.recipe.assert_called_once_with(
+            pattern="zlib/1.2.13#abc123", confirm=True, remote=None
+        )
     
-    @patch('extensions.commands.cmd_cache_cleanup._run_conan_command')
     @patch('builtins.input', return_value='y')
-    def test_remove_with_confirmation_yes(self, mock_input, mock_run):
+    def test_remove_with_confirmation_yes(self, mock_input):
         """Test removing a recipe with confirmation (user says yes)."""
-        result = _remove_recipe("zlib/1.2.13#abc123", confirm=True)
+        mock_api = MagicMock()
+        mock_api.remove.recipe = MagicMock()
+        
+        result = _remove_recipe(mock_api, "zlib/1.2.13#abc123", confirm=True)
         
         self.assertTrue(result)
         mock_input.assert_called_once()
-        mock_run.assert_called_once_with(["conan", "remove", "zlib/1.2.13#abc123", "-c"])
+        mock_api.remove.recipe.assert_called_once_with(
+            pattern="zlib/1.2.13#abc123", confirm=True, remote=None
+        )
     
-    @patch('extensions.commands.cmd_cache_cleanup._run_conan_command')
     @patch('builtins.input', return_value='n')
-    def test_remove_with_confirmation_no(self, mock_input, mock_run):
+    def test_remove_with_confirmation_no(self, mock_input):
         """Test removing a recipe with confirmation (user says no)."""
-        result = _remove_recipe("zlib/1.2.13#abc123", confirm=True)
+        mock_api = MagicMock()
+        
+        result = _remove_recipe(mock_api, "zlib/1.2.13#abc123", confirm=True)
         
         self.assertFalse(result)
         mock_input.assert_called_once()
-        mock_run.assert_not_called()
+        mock_api.remove.recipe.assert_not_called()
 
 
 class TestListCacheRecipes(unittest.TestCase):
     """Test the _list_cache_recipes function."""
     
-    @patch('extensions.commands.cmd_cache_cleanup._run_conan_command')
-    def test_list_cache_recipes(self, mock_run):
+    def test_list_cache_recipes(self):
         """Test listing cache recipes."""
-        mock_output = json.dumps({"Local Cache": {}})
-        mock_run.return_value = mock_output
+        mock_api = MagicMock()
+        mock_list_result = MockListResult(recipe_bundles={})
+        mock_api.list.select = MagicMock(return_value=mock_list_result)
         
-        result = _list_cache_recipes()
+        result = _list_cache_recipes(mock_api)
         
-        self.assertEqual(result, {"Local Cache": {}})
-        mock_run.assert_called_once_with(["conan", "list", "*:*", "-c", "-f", "json"])
+        self.assertEqual(result, mock_list_result)
+        mock_api.list.select.assert_called_once_with(
+            pattern="*:*", package_query=None, remote=None, lru=None
+        )
     
-    @patch('extensions.commands.cmd_cache_cleanup._run_conan_command')
-    def test_list_cache_recipes_invalid_json(self, mock_run):
-        """Test listing cache recipes with invalid JSON."""
+    def test_list_cache_recipes_error(self):
+        """Test listing cache recipes with error."""
         with patch('extensions.commands.cmd_cache_cleanup.ConanException', ConanException):
-            mock_run.return_value = "invalid json"
+            mock_api = MagicMock()
+            mock_api.list.select = MagicMock(side_effect=Exception("Connection error"))
             
             with self.assertRaises(ConanException):
-                _list_cache_recipes()
+                _list_cache_recipes(mock_api)
 
 
 if __name__ == '__main__':

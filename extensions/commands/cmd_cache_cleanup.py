@@ -14,7 +14,6 @@ Options:
 """
 
 import json
-import subprocess
 import sys
 
 from conan.api.output import cli_out_write, ConanOutput, Color
@@ -22,62 +21,35 @@ from conan.cli.command import conan_command
 from conan.errors import ConanException
 
 
-def _run_conan_command(cmd):
+def _list_cache_recipes(conan_api):
     """
-    Execute a conan command and return its output.
+    List all recipes and their packages from the Conan cache using the Conan API.
     
     Args:
-        cmd: List of command arguments
-        
-    Returns:
-        str: Command output
-        
-    Raises:
-        ConanException: If command fails
-    """
-    # Validate that we're only executing conan commands
-    if not cmd or cmd[0] != "conan":
-        raise ConanException("Only conan commands are allowed")
-    
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        raise ConanException(f"Failed to execute command: {' '.join(cmd)}\n{e.stderr}")
-    except FileNotFoundError:
-        raise ConanException("Conan command not found. Please ensure Conan is installed.")
-
-
-def _list_cache_recipes():
-    """
-    List all recipes and their packages from the Conan cache.
+        conan_api: The Conan API object
     
     Returns:
-        dict: Parsed JSON output from 'conan list' command
+        dict: Dictionary containing cache information
         
     Raises:
         ConanException: If listing fails
     """
-    cmd = ["conan", "list", "*:*", "-c", "-f", "json"]
-    output = _run_conan_command(cmd)
-    
     try:
-        return json.loads(output)
-    except json.JSONDecodeError as e:
-        raise ConanException(f"Failed to parse JSON output: {e}")
+        # Use conan_api.list.select() to list all recipes in cache
+        # Pattern "*:*" lists all recipes with all packages
+        list_result = conan_api.list.select(pattern="*:*", package_query=None, 
+                                           remote=None, lru=None)
+        return list_result
+    except Exception as e:
+        raise ConanException(f"Failed to list cache recipes: {e}")
 
 
-def _identify_recipes_without_binaries(cache_data):
+def _identify_recipes_without_binaries(list_result):
     """
     Identify recipes/revisions that have no binary packages.
     
     Args:
-        cache_data: Dictionary containing cache information
+        list_result: ListResult object from conan_api.list.select()
         
     Returns:
         dict: Dictionary with three lists:
@@ -88,31 +60,15 @@ def _identify_recipes_without_binaries(cache_data):
     recipes_to_remove = []
     recipes_with_binaries = []
     
-    # The structure of conan list output is:
-    # {
-    #   "Local Cache": {
-    #     "recipe_name/version[@user/channel]": {
-    #       "revisions": {
-    #         "revision_hash": {
-    #           "packages": {
-    #             "package_id": { ... }
-    #           }
-    #         }
-    #       }
-    #     }
-    #   }
-    # }
-    
-    local_cache = cache_data.get("Local Cache", {})
-    
-    for recipe_ref, recipe_data in local_cache.items():
-        revisions = recipe_data.get("revisions", {})
-        
-        for revision_hash, revision_data in revisions.items():
-            packages = revision_data.get("packages", {})
-            full_ref = f"{recipe_ref}#{revision_hash}"
+    # The ListResult object contains recipe references
+    # We need to iterate through them and check for packages
+    for recipe_ref, recipe_bundle in list_result.recipe_bundles.items():
+        # Check each revision
+        for revision, recipe_revision_bundle in recipe_bundle.revisions.items():
+            full_ref = f"{recipe_ref}#{revision}"
             
-            if not packages:
+            # Check if this revision has packages
+            if not recipe_revision_bundle.packages or len(recipe_revision_bundle.packages) == 0:
                 # No binary packages for this revision
                 recipes_to_remove.append(full_ref)
             else:
@@ -126,11 +82,12 @@ def _identify_recipes_without_binaries(cache_data):
     }
 
 
-def _remove_recipe(recipe_ref, confirm=False):
+def _remove_recipe(conan_api, recipe_ref, confirm=False):
     """
-    Remove a recipe from the Conan cache.
+    Remove a recipe from the Conan cache using the Conan API.
     
     Args:
+        conan_api: The Conan API object
         recipe_ref: Full recipe reference (e.g., 'name/version#revision')
         confirm: Whether to confirm before removing
         
@@ -145,9 +102,12 @@ def _remove_recipe(recipe_ref, confirm=False):
         if response != 'y':
             return False
     
-    cmd = ["conan", "remove", recipe_ref, "-c"]
-    _run_conan_command(cmd)
-    return True
+    try:
+        # Use conan_api.remove.recipe() to remove the recipe
+        conan_api.remove.recipe(pattern=recipe_ref, confirm=True, remote=None)
+        return True
+    except Exception as e:
+        raise ConanException(f"Failed to remove {recipe_ref}: {e}")
 
 
 def _format_text_output(result):
@@ -217,13 +177,13 @@ def cache_cleanup(conan_api, parser, *args):
     parsed_args = parser.parse_args(*args)
     
     try:
-        # List all recipes in the cache
+        # List all recipes in the cache using the Conan API
         ConanOutput().info("Listing recipes in cache...")
-        cache_data = _list_cache_recipes()
+        list_result = _list_cache_recipes(conan_api)
         
         # Identify recipes without binaries
         ConanOutput().info("Analyzing recipes...")
-        analysis = _identify_recipes_without_binaries(cache_data)
+        analysis = _identify_recipes_without_binaries(list_result)
         
         removed = []
         skipped = []
@@ -233,7 +193,7 @@ def cache_cleanup(conan_api, parser, *args):
             ConanOutput().info(f"Removing {len(analysis['recipes_to_remove'])} recipe(s) without binaries...")
             for recipe_ref in analysis['recipes_to_remove']:
                 try:
-                    if _remove_recipe(recipe_ref, confirm=parsed_args.confirm):
+                    if _remove_recipe(conan_api, recipe_ref, confirm=parsed_args.confirm):
                         removed.append(recipe_ref)
                         ConanOutput().success(f"Removed: {recipe_ref}")
                     else:
