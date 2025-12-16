@@ -68,7 +68,7 @@ def _identify_recipes_without_binaries(list_result):
             full_ref = f"{recipe_ref}#{revision}"
             
             # Check if this revision has packages
-            if not recipe_revision_bundle.packages or len(recipe_revision_bundle.packages) == 0:
+            if not recipe_revision_bundle.packages:
                 # No binary packages for this revision
                 recipes_to_remove.append(full_ref)
             else:

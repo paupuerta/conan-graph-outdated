@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from extensions.commands.cmd_cache_cleanup import (
     _identify_recipes_without_binaries,
     _list_cache_recipes,
-    _remove_recipe
+    _remove_recipe,
 )
 
 
